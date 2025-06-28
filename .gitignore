@@ -1,0 +1,9 @@
+/.venv/
+/AtlantisWatcher.spec
+/build/
+/.gitignore
+/dist/
+/fastapi_app.spec
+/myapp.spec
+/main.spec
+/uv.lock
