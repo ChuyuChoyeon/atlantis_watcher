@@ -1,0 +1,17 @@
+[project]
+name = "atlantis-watcher"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115.14",
+    "numpy>=2.3.1",
+    "opencv-python>=4.11.0.86",
+    "pillow>=11.2.1",
+    "pyautogui>=0.9.54",
+    "pyinstaller>=6.14.1",
+    "pystray>=0.19.5",
+    "python-multipart>=0.0.20",
+    "pywin32>=310",
+    "uvicorn[standard]>=0.34.3",
+]
