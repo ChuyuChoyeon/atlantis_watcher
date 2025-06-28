@@ -7,3 +7,10 @@
 /myapp.spec
 /main.spec
 /uv.lock
+/.idea/.gitignore
+/.idea/atlantis_watcher.iml
+/.idea/misc.xml
+/.idea/modules.xml
+/.idea/inspectionProfiles/profiles_settings.xml
+/.idea/dictionaries/project.xml
+/.idea/vcs.xml
