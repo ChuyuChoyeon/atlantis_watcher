@@ -126,12 +126,13 @@ app.add_middleware(
 )
 
 # 挂载静态文件目录
-app.mount("/static", StaticFiles(directory="webgui"), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 
 # 根路径返回主页
 @app.get("/")
 async def read_root():
-    return FileResponse("webgui/index.html")
+    return FileResponse("template/index.html")
 class CommandRequest(BaseModel):
     command: str
     is_powershell: bool = False
@@ -1003,37 +1004,6 @@ async def open_file(path: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"打开文件失败: {str(e)}")
 
-@app.post("/api/system/restart")
-async def restart_service():
-    """重启服务"""
-    try:
-        logger.info("收到重启服务请求")
-        
-        # 在后台线程中执行重启
-        def do_restart():
-            time.sleep(1)  # 给响应时间返回
-            global server
-            if server:
-                logger.info("停止当前服务器")
-                server.should_exit = True
-                
-            # 等待服务器完全关闭
-            time.sleep(2)
-            
-            # 重新启动服务器
-            logger.info("正在重启服务...")
-            threading.Thread(target=run_server, daemon=True).start()
-        
-        threading.Thread(target=do_restart, daemon=True).start()
-        
-        return JSONResponse({
-            "success": True,
-            "message": "服务重启中..."
-        })
-        
-    except Exception as e:
-        logger.error(f"重启服务失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"重启服务失败: {str(e)}")
 
 @app.get("/api/files/icon")
 async def get_file_icon(path: str):
@@ -1539,7 +1509,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     logger.info(f"性能调整: 降低帧率至 {target_fps} FPS")
                 elif processing_time < frame_interval * 0.5 and target_fps < 20:  # 如果处理时间少于预期的50%
                     # 提高目标帧率
-                    target_fps = min(20, target_fps + 1)  # 不高于20 FPS
+                    target_fps = min(120, target_fps + 1)  # 不高于20 FPS
                     frame_interval = 1.0 / target_fps
                     logger.info(f"性能调整: 提高帧率至 {target_fps} FPS")
             except Exception as e:
@@ -1567,42 +1537,69 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         logger.warning(f"关闭屏幕共享WebSocket连接时出错: {str(e)}")
 
+@log_exceptions
+def lock_screen_windows():
+    """使用Windows API锁定屏幕"""
+    logger.info("执行锁屏操作")
+    try:
+        # 使用ctypes调用Windows API
+        import ctypes
+        from ctypes import wintypes
+        
+        # 加载user32.dll
+        user32 = ctypes.windll.user32
+        
+        # 调用LockWorkStation函数
+        result = user32.LockWorkStation()
+        
+        if result:
+            logger.info("锁屏命令执行成功")
+            return {
+                "output": "屏幕已锁定",
+                "error": "",
+                "returncode": 0,
+                "success": True
+            }
+        else:
+            # 获取错误代码
+            error_code = ctypes.get_last_error()
+            error_msg = f"锁屏失败，错误代码: {error_code}"
+            logger.error(error_msg)
+            return {
+                "output": "",
+                "error": error_msg,
+                "returncode": error_code,
+                "success": False
+            }
+    except Exception as e:
+        error_msg = f"锁屏异常: {str(e)}"
+        logger.error(error_msg)
+        logger.error(f"异常详情: {traceback.format_exc()}")
+        return {
+            "output": "",
+            "error": error_msg,
+            "returncode": -1,
+            "success": False
+        }
+
 @app.post("/lock", status_code=status.HTTP_200_OK)
 async def lock_screen():
+    """锁定屏幕API"""
     logger.info("API请求 - 锁定屏幕")
     
     try:
-        result = subprocess.run(
-            ["rundll32.exe", "user32.dll,LockWorkStation"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=10
-        )
-        response_data = {
-            "success": result.returncode == 0,
-            "output": result.stdout.strip() or "锁屏命令已发送",
-            "error": result.stderr,
-            "returncode": result.returncode
-        }
+        result = lock_screen_windows()
         
-        if response_data["success"]:
+        if result["success"]:
             logger.info("屏幕锁定成功")
+            return JSONResponse(content=result)
         else:
-            logger.warning(f"屏幕锁定失败 - 返回码: {result.returncode}, 错误: {result.stderr}")
+            logger.warning(f"屏幕锁定失败: {result['error']}")
             raise HTTPException(
                 status_code=500,
-                detail=response_data
+                detail=result
             )
-        return JSONResponse(content=response_data)
-        
-    except subprocess.TimeoutExpired:
-        error_msg = "锁屏命令执行超时"
-        logger.error(f"API锁屏操作超时")
-        raise HTTPException(
-            status_code=408,
-            detail={"error": error_msg, "output": "", "returncode": -1, "success": False}
-        )
+            
     except HTTPException:
         raise
     except Exception as e:
